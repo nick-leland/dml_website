@@ -56,6 +56,12 @@
             max-width: 100%;
             height: auto;
         }
+        #loadingIndicator {
+            display: none;
+            text-align: center;
+            font-size: 18px;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -70,6 +76,7 @@
             <canvas id="canvas"></canvas>
             <button id="confirmShape">Confirm Shape</button>
         </div>
+        <div id="loadingIndicator">Processing image...</div>
         <div id="outputDisplay" style="display: none;">
             <div class="output-images">
                 <div class="output-image">
@@ -105,6 +112,7 @@
         const toggleShapeBtn = document.getElementById('toggleShape');
         const confirmShapeBtn = document.getElementById('confirmShape');
         const canvasElement = document.getElementById('canvas');
+        const loadingIndicator = document.getElementById('loadingIndicator');
 
         imageInput.addEventListener('change', handleImageUpload);
         useExampleBtn.addEventListener('click', useExampleImage);
@@ -219,7 +227,7 @@
             ctx.drawImage(image, 0, 0);
         }
 
-        function confirmShape() {
+        async function confirmShape() {
             const normalizedCenter = {
                 x: center.x / canvas.width,
                 y: center.y / canvas.height
@@ -231,7 +239,17 @@
                     Math.sqrt(Math.pow(secondAxis.x - center.x, 2) + Math.pow(secondAxis.y - center.y, 2))
                   ) / Math.max(canvas.width, canvas.height);
 
-            transformImage(normalizedCenter, normalizedRadius);
+            loadingIndicator.style.display = 'block';
+            document.getElementById('shapeSelection').style.display = 'none';
+
+            try {
+                await transformImage(normalizedCenter, normalizedRadius);
+            } catch (error) {
+                console.error('Error during image transformation:', error);
+                alert('An error occurred during image transformation. Please try again.');
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
         }
 
         async function transformImage(center, radius) {
@@ -254,21 +272,27 @@
 
         function displayResults(result) {
             document.getElementById('outputDisplay').style.display = 'block';
-            document.getElementById('originalImage').src = URL.createObjectURL(image);
-            document.getElementById('classificationImage').src = result.data[1];
-            document.getElementById('inverseImage').src = result.data[0];
-            document.getElementById('fixedImage').src = result.data[5];
+            
+            const originalImage = document.getElementById('originalImage');
+            const classificationImage = document.getElementById('classificationImage');
+            const inverseImage = document.getElementById('inverseImage');
+            const fixedImage = document.getElementById('fixedImage');
+
+            originalImage.src = URL.createObjectURL(image);
+            classificationImage.src = result.data[1];
+            inverseImage.src = result.data[0];
+            fixedImage.src = result.data[5];
 
             const toggleButtons = document.querySelectorAll('.toggleGradient');
             toggleButtons.forEach((button, index) => {
-                const originalImage = index === 0 ? result.data[0] : result.data[3];
-                const gradientImage = index === 0 ? result.data[2] : result.data[4];
+                const img = button.previousElementSibling;
+                const originalSrc = index === 0 ? URL.createObjectURL(image) : result.data[0];
+                const gradientSrc = index === 0 ? result.data[2] : result.data[4];
                 let isGradient = false;
 
                 button.addEventListener('click', () => {
                     isGradient = !isGradient;
-                    const img = button.previousElementSibling;
-                    img.src = isGradient ? gradientImage : originalImage;
+                    img.src = isGradient ? gradientSrc : originalSrc;
                 });
             });
         }
