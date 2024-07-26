@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Transformation Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #imageUpload, #shapeSelection, #outputDisplay {
+            margin-bottom: 20px;
+        }
+        #canvas {
+            border: 1px solid #ddd;
+            display: none;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .output-images {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        .output-image {
+            width: 48%;
+            margin-bottom: 20px;
+        }
+        .output-image img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Transformation Tool</h1>
+        <div id="imageUpload">
+            <input type="file" id="imageInput" accept="image/*">
+            <button id="useExample">Use Example Image</button>
+        </div>
+        <div id="shapeSelection" style="display: none;">
+            <button id="toggleShape">Toggle Shape (Circle/Ellipse)</button>
+            <canvas id="canvas"></canvas>
+            <button id="confirmShape">Confirm Shape</button>
+        </div>
+        <div id="outputDisplay" style="display: none;">
+            <div class="output-images">
+                <div class="output-image">
+                    <h3>Original Image</h3>
+                    <img id="originalImage" alt="Original Image">
+                    <button class="toggleGradient">Toggle Gradient</button>
+                </div>
+                <div class="output-image">
+                    <h3>Classification</h3>
+                    <img id="classificationImage" alt="Classification">
+                </div>
+                <div class="output-image">
+                    <h3>Inverse Image</h3>
+                    <img id="inverseImage" alt="Inverse Image">
+                    <button class="toggleGradient">Toggle Gradient</button>
+                </div>
+                <div class="output-image">
+                    <h3>Fixed Image</h3>
+                    <img id="fixedImage" alt="Fixed Image">
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@gradio/client@0.10.1/dist/index.min.js"></script>
+    <script>
+        let isCircle = true;
+        let clickCount = 0;
+        let center, firstAxis, secondAxis;
+        let canvas, ctx, image;
+
+        const imageInput = document.getElementById('imageInput');
+        const useExampleBtn = document.getElementById('useExample');
+        const toggleShapeBtn = document.getElementById('toggleShape');
+        const confirmShapeBtn = document.getElementById('confirmShape');
+        const canvasElement = document.getElementById('canvas');
+
+        imageInput.addEventListener('change', handleImageUpload);
+        useExampleBtn.addEventListener('click', useExampleImage);
+        toggleShapeBtn.addEventListener('click', toggleShape);
+        confirmShapeBtn.addEventListener('click', confirmShape);
+        canvasElement.addEventListener('click', handleCanvasClick);
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    setupCanvas(e.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function useExampleImage() {
+            fetch('https://raw.githubusercontent.com/gradio-app/gradio/main/test/test_files/bus.png')
+                .then(response => response.blob())
+                .then(blob => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        setupCanvas(e.target.result);
+                    }
+                    reader.readAsDataURL(blob);
+                });
+        }
+
+        function setupCanvas(imageSrc) {
+            document.getElementById('shapeSelection').style.display = 'block';
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            image = new Image();
+            image.onload = function() {
+                canvas.width = image.width;
+                canvas.height = image.height;
+                canvas.style.display = 'block';
+                ctx.drawImage(image, 0, 0);
+            }
+            image.src = imageSrc;
+        }
+
+        function toggleShape() {
+            isCircle = !isCircle;
+            toggleShapeBtn.textContent = `Toggle Shape (${isCircle ? 'Circle' : 'Ellipse'})`;
+            resetCanvas();
+        }
+
+        function handleCanvasClick(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            clickCount++;
+
+            if (clickCount === 1) {
+                center = { x, y };
+                drawPoint(x, y);
+            } else if (clickCount === 2) {
+                firstAxis = { x, y };
+                drawLine(center.x, center.y, x, y);
+                if (isCircle) {
+                    drawCircle();
+                    clickCount = 0;
+                }
+            } else if (clickCount === 3 && !isCircle) {
+                secondAxis = { x, y };
+                drawEllipse();
+                clickCount = 0;
+            }
+        }
+
+        function drawPoint(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+        }
+
+        function drawLine(x1, y1, x2, y2) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = 'blue';
+            ctx.stroke();
+        }
+
+        function drawCircle() {
+            const radius = Math.sqrt(Math.pow(firstAxis.x - center.x, 2) + Math.pow(firstAxis.y - center.y, 2));
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'green';
+            ctx.stroke();
+        }
+
+        function drawEllipse() {
+            const radiusX = Math.sqrt(Math.pow(firstAxis.x - center.x, 2) + Math.pow(firstAxis.y - center.y, 2));
+            const radiusY = Math.sqrt(Math.pow(secondAxis.x - center.x, 2) + Math.pow(secondAxis.y - center.y, 2));
+            ctx.beginPath();
+            ctx.ellipse(center.x, center.y, radiusX, radiusY, 0, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'green';
+            ctx.stroke();
+        }
+
+        function resetCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0);
+            clickCount = 0;
+            center = firstAxis = secondAxis = null;
+        }
+
+        function confirmShape() {
+            const normalizedCenter = {
+                x: center.x / canvas.width,
+                y: center.y / canvas.height
+            };
+            const normalizedRadius = isCircle
+                ? Math.sqrt(Math.pow(firstAxis.x - center.x, 2) + Math.pow(firstAxis.y - center.y, 2)) / Math.max(canvas.width, canvas.height)
+                : Math.max(
+                    Math.sqrt(Math.pow(firstAxis.x - center.x, 2) + Math.pow(firstAxis.y - center.y, 2)),
+                    Math.sqrt(Math.pow(secondAxis.x - center.x, 2) + Math.pow(secondAxis.y - center.y, 2))
+                  ) / Math.max(canvas.width, canvas.height);
+
+            transformImage(normalizedCenter, normalizedRadius);
+        }
+
+        async function transformImage(center, radius) {
+            const client = await gradio.Client.connect("nick-leland/ImageTransformationTool");
+            
+            const imageBlob = await new Promise(resolve => canvas.toBlob(resolve));
+            
+            const result = await client.predict("/predict", {
+                image: imageBlob,
+                func_choice: "Bulge",
+                randomization_check: false,
+                radius: radius,
+                center_x: center.x,
+                center_y: center.y,
+                strength: 0.5,
+            });
+
+            displayResults(result);
+        }
+
+        function displayResults(result) {
+            document.getElementById('outputDisplay').style.display = 'block';
+            document.getElementById('originalImage').src = URL.createObjectURL(image);
+            document.getElementById('classificationImage').src = result.data[1];
+            document.getElementById('inverseImage').src = result.data[0];
+            document.getElementById('fixedImage').src = result.data[5];
+
+            const toggleButtons = document.querySelectorAll('.toggleGradient');
+            toggleButtons.forEach((button, index) => {
+                const originalImage = index === 0 ? result.data[0] : result.data[3];
+                const gradientImage = index === 0 ? result.data[2] : result.data[4];
+                let isGradient = false;
+
+                button.addEventListener('click', () => {
+                    isGradient = !isGradient;
+                    const img = button.previousElementSibling;
+                    img.src = isGradient ? gradientImage : originalImage;
+                });
+            });
+        }
+    </script>
+</body>
+</html>
